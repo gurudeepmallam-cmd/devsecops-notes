@@ -340,7 +340,7 @@ Internet
        │
     ▼
 ┌─────────────┐
-│ Load Balancer│  (NGINX / F5 BIG-IP, round-robin)
+│ Load Balancer│  (NGINX / HAProxy, round-robin)
 └──────┬──────┘
        │
    ┌───┴───┐
