@@ -590,4 +590,12 @@ The security model is: **the pipeline is the last automated decision-maker befor
 
 ---
 
+## References
+
+- [Semgrep Registry](https://semgrep.dev/r) — community and official rule packs, searchable by language and category
+- [SLSA Framework](https://slsa.dev) — supply chain levels for software artifacts; the reference model for build provenance and integrity
+- [GitLab CI/CD Security Best Practices](https://docs.gitlab.com/ee/ci/pipelines/pipeline_security.html) — official documentation on protected variables, masked secrets, and runner isolation
+
+---
+
 *Gurudeep Mallam · gurudeep.mallam@gmail.com · July 2026*
